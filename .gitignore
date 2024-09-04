@@ -1,0 +1,5 @@
+# Ignore dotfiles
+.*
+
+# Keep the .gitignore file
+!.gitignore

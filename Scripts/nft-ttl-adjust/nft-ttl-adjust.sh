@@ -11,12 +11,10 @@
 set -e
 
 DEFAULT_INTERFACE="usb0"
-DEFAULT_TTL=117
-TABLE_FAMILY="inet"
-TABLE_NAME="fw4"
-CHAIN_NAME="mangle_forward"
-COMMENT_V4="ttl-adjust-ipv4"
-COMMENT_V6="ttl-adjust-ipv6"
+DEFAULT_TTL=65
+# New approach: drop-in snippet management for fw4
+PRE_DIR="/usr/share/nftables.d/chain-pre/mangle_postrouting"
+SNIPPET_FILE="$PRE_DIR/01-set-ttl.nft"
 
 TTL_VALUE="$DEFAULT_TTL"
 INTERFACE_NAME="$DEFAULT_INTERFACE"
@@ -94,89 +92,78 @@ Usage: nft-ttl-adjust.sh [options]
 
 Options:
   --interface <ifname>   Output interface to match (default: usb0)
-  --ttl <value>          TTL/HopLimit to set (default: 117)
-  --apply                Apply (default action)
-  --remove               Remove the TTL rules
-  --status               Show current matching rules
-  --quiet                Suppress informational output
-    --create               Create table/chain if missing (requires nft privileges)
+    --ttl <value>          TTL/HopLimit to set (default: 65)
+    --apply                Apply (default action). This will create the snippet at
+                                                 /usr/share/nftables.d/chain-pre/mangle_postrouting/01-set-ttl.nft
+    --remove               Remove the snippet file and reload fw4
+    --status               Show current snippet contents or (none)
+    --quiet                Suppress informational output
+        --create               Create parent directory if missing (requires privileges)
   --help                 Show this help text
 
 Notes:
   * Requires nftables (fw4) and the default table inet fw4 on OpenWrt.
-  * Adds two rules with comments "ttl-adjust-ipv4" and "ttl-adjust-ipv6".
+    * Writes a small fw4 drop-in snippet under /usr/share/nftables.d/chain-pre/mangle_postrouting
 EOF
 }
 
 ensure_fw4_chain_exists() {
-    if ! nft list table "$TABLE_FAMILY" "$TABLE_NAME" >/dev/null 2>&1; then
+    # Ensure the drop-in directory exists (or allow --create to make it)
+    if [ ! -d "$PRE_DIR" ]; then
         if [ "$AUTO_CREATE" -eq 1 ] 2>/dev/null; then
-            log "Table $TABLE_FAMILY $TABLE_NAME not found; creating it"
-            nft add table "$TABLE_FAMILY" "$TABLE_NAME" || error_exit "Failed to create table $TABLE_NAME"
+            log "Directory $PRE_DIR not found; creating it"
+            mkdir -p "$PRE_DIR" || error_exit "Failed to create directory $PRE_DIR"
         else
-            error_exit "Table $TABLE_FAMILY $TABLE_NAME not found; ensure fw4 is active or run with --create"
+            error_exit "Directory $PRE_DIR not found; run with --create to create it"
         fi
     fi
-
-    if ! nft list chain "$TABLE_FAMILY" "$TABLE_NAME" "$CHAIN_NAME" >/dev/null 2>&1; then
-        if [ "$AUTO_CREATE" -eq 1 ] 2>/dev/null; then
-            log "Chain $CHAIN_NAME not found in table $TABLE_NAME; creating chain"
-            nft add chain "$TABLE_FAMILY" "$TABLE_NAME" "$CHAIN_NAME" \{ type filter hook forward priority 0; \} || error_exit "Failed to create chain $CHAIN_NAME"
-        else
-            error_exit "Chain $CHAIN_NAME not found in table $TABLE_NAME; run with --create to create it"
-        fi
-    fi
-}
-
-get_handles_by_comment() {
-    local comment="$1"
-    nft --handle --numeric list chain "$TABLE_FAMILY" "$TABLE_NAME" "$CHAIN_NAME" \
-        2>/dev/null | awk -v c="$comment" '
-            $0 ~ ("comment \"" c "\"") {
-                for (i = 1; i <= NF; i++) {
-                    if ($i == "handle") {
-                        print $(i + 1)
-                    }
-                }
-            }
-        '
 }
 
 remove_rules() {
-    local handles handle
-
-    handles=$(get_handles_by_comment "$COMMENT_V4")
-    for handle in $handles; do
-        log "Removing IPv4 TTL rule (handle $handle)"
-        nft delete rule "$TABLE_FAMILY" "$TABLE_NAME" "$CHAIN_NAME" handle "$handle"
-    done
-
-    handles=$(get_handles_by_comment "$COMMENT_V6")
-    for handle in $handles; do
-        log "Removing IPv6 HopLimit rule (handle $handle)"
-        nft delete rule "$TABLE_FAMILY" "$TABLE_NAME" "$CHAIN_NAME" handle "$handle"
-    done
+    if [ -f "$SNIPPET_FILE" ]; then
+        log "Removing snippet $SNIPPET_FILE"
+        rm -f "$SNIPPET_FILE" || error_exit "Failed to remove $SNIPPET_FILE"
+        log "Reloading fw4"
+        fw4 reload || error_exit "fw4 reload failed"
+    else
+        log "No snippet to remove at $SNIPPET_FILE"
+    fi
 }
 
 apply_rules() {
-    remove_rules
+    # Ensure parent dir exists (create if requested)
+    if [ ! -d "$PRE_DIR" ]; then
+        if [ "$AUTO_CREATE" -eq 1 ] 2>/dev/null; then
+            log "Creating directory $PRE_DIR"
+            mkdir -p "$PRE_DIR" || error_exit "Failed to create $PRE_DIR"
+        else
+            error_exit "Directory $PRE_DIR does not exist; run with --create to create it"
+        fi
+    fi
 
-    log "Applying TTL adjust on interface '$INTERFACE_NAME' with TTL $TTL_VALUE"
-    nft add rule "$TABLE_FAMILY" "$TABLE_NAME" "$CHAIN_NAME" \
-        oifname "$INTERFACE_NAME" ip ttl set "$TTL_VALUE" comment "$COMMENT_V4"
-    nft add rule "$TABLE_FAMILY" "$TABLE_NAME" "$CHAIN_NAME" \
-        oifname "$INTERFACE_NAME" ip6 hoplimit set "$TTL_VALUE" comment "$COMMENT_V6"
+    log "Writing snippet to $SNIPPET_FILE with TTL $TTL_VALUE"
+    tmpfile="${SNIPPET_FILE}.tmp.$$"
+    {
+        printf 'ip ttl set %s\n' "$TTL_VALUE"
+        printf 'ip6 hoplimit set %s\n' "$TTL_VALUE"
+    } >"$tmpfile" || error_exit "Failed to write temporary file $tmpfile"
+    mv "$tmpfile" "$SNIPPET_FILE" || error_exit "Failed to move $tmpfile to $SNIPPET_FILE"
+    log "Reloading fw4"
+    fw4 reload || error_exit "fw4 reload failed"
 }
 
 show_status() {
-    log "Current rules in $TABLE_FAMILY $TABLE_NAME $CHAIN_NAME containing 'ttl-adjust'"
-    nft list chain "$TABLE_FAMILY" "$TABLE_NAME" "$CHAIN_NAME" 2>/dev/null | \
-        grep 'ttl-adjust' || echo "(none)"
+    log "Current snippet at $SNIPPET_FILE"
+    if [ -f "$SNIPPET_FILE" ]; then
+        cat "$SNIPPET_FILE"
+    else
+        echo "(none)"
+    fi
 }
 
 main() {
     parse_args "$@"
-    require_command nft
+    require_command fw4
     ensure_fw4_chain_exists
 
     case "$ACTION" in

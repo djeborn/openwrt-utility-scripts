@@ -5,41 +5,38 @@ external write-ups on carrier TTL/workarounds for background reading.
 
 ## What It Does
 
-- Adds IPv4 and IPv6 rules to the default `inet fw4 mangle_forward` chain
-- Sets TTL/HopLimit to 117 (common carrier recommendation)
-- Tags rules with comments so they can be removed cleanly
-- Supports custom interface names and TTL values
-- Provides a status view and clean removal option
+This version uses fw4 "chain-pre" snippets instead of directly adding rules
+with `nft`.
+
+- Writes a snippet file under `/usr/share/nftables.d/chain-pre/mangle_postrouting`
+   containing the TTL/HopLimit rewrite lines.
+- Reloads `fw4` to apply changes.
+- Supports `--create` to create the parent directory when needed.
 
 ## Local summary
 
-This helper implements a simple ttl/hoplimit rewrite using nftables. The
-approach matches outgoing packets on a specified interface and sets the IPv4
-TTL or IPv6 HopLimit to a fixed value so that downstream carrier systems see
-the packet as if it originated from a handset. Key points:
+This helper implements a simple ttl/hoplimit rewrite using fw4 snippets. The
+snippet contains simple nft expressions which are evaluated in the
+`mangle_postrouting` chain context by fw4. Key points:
 
-- Rules are added to the `inet fw4 mangle_forward` chain and match by
-   `oifname <interface>`.
-- IPv4 uses `ip ttl set <value>`, IPv6 uses `ip6 hoplimit set <value>`.
-- Rules are inserted with unique comments so the script can find and remove
-   them cleanly later.
-- The default value `117` is commonly used by several carriers; change it if
-   you have a different recommended value.
+- The snippet contains the expressions `ip ttl set <value>` and
+  `ip6 hoplimit set <value>`.
+- Changes are applied via `fw4 reload` so they integrate with fw4-managed
+  tables and other snippets.
+- The default TTL is `65` but you can change it with `--ttl`.
 
-Example nft rule (conceptual):
+Example snippet (conceptual):
 
-```nft
-# IPv4
-nft add rule inet fw4 mangle_forward oifname "usb0" ip ttl set 117 comment "ttl-adjust-ipv4"
-# IPv6
-nft add rule inet fw4 mangle_forward oifname "usb0" ip6 hoplimit set 117 comment "ttl-adjust-ipv6"
+```sh
+ip ttl set 65
+ip6 hoplimit set 65
 ```
 
 ## Requirements
 
 - OpenWrt using `fw4`/nftables (22.03+)
-- `nft` binary installed (default in modern OpenWrt builds)
-- The interface you intend to manipulate (defaults to `usb0`, adjust as needed)
+- `fw4` helper installed (default in modern OpenWrt builds)
+- Permission to write to `/usr/share/nftables.d/chain-pre/mangle_postrouting`
 
 ## Installation
 
@@ -60,7 +57,7 @@ nft add rule inet fw4 mangle_forward oifname "usb0" ip6 hoplimit set 117 comment
 ### Apply (default)
 
 ```sh
-/root/Scripts/nft-ttl-adjust/nft-ttl-adjust.sh --interface usb0 --ttl 117
+/root/Scripts/nft-ttl-adjust/nft-ttl-adjust.sh --interface usb0 --ttl 65
 ```
 
 ### Remove the rules

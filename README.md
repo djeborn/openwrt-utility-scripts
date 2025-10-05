@@ -139,34 +139,45 @@ chmod +x /etc/init.d/usb-tether-monitor
 /etc/init.d/usb-tether-monitor start
 ```
 
-## TTL Bypass Helper
+## TTL Bypass Helper (snippet-based)
 
-The `Scripts/nft-ttl-adjust/nft-ttl-adjust.sh` script automates nftables rules
-that adjust packet TTL/HopLimit on a specified outgoing interface. See external
-write-ups on carrier TTL/workarounds for background reading.
+The `Scripts/nft-ttl-adjust/nft-ttl-adjust.sh` helper now manages a small
+drop-in snippet for `fw4` instead of directly adding/removing rules with
+`nft`. This aligns with OpenWrt's `fw4` snippet mechanism and makes the
+changes persistent and easy to manage via the normal `fw4 reload` flow.
 
-### Apply the rules
+What it does now:
+
+- Writes a snippet file at `/usr/share/nftables.d/chain-pre/mangle_postrouting/01-set-ttl.nft`
+   containing two simple rewrite lines:
+   - `ip ttl set <value>`
+   - `ip6 hoplimit set <value>`
+- Calls `fw4 reload` after creating or removing the snippet so the change is applied.
+- Supports `--create` to create the parent directory if it's missing.
+
+Examples
+
+Apply (default) — creates the snippet and reloads fw4:
 
 ```sh
-/root/Scripts/nft-ttl-adjust/nft-ttl-adjust.sh --interface eth1 --ttl 117
+/root/Scripts/nft-ttl-adjust/nft-ttl-adjust.sh --ttl 65 --create --apply
 ```
 
-### Remove the rules
+Remove the snippet and reload fw4:
 
 ```sh
 /root/Scripts/nft-ttl-adjust/nft-ttl-adjust.sh --remove
 ```
 
-### Check status
+Check status (prints the snippet contents or `(none)`):
 
 ```sh
 /root/Scripts/nft-ttl-adjust/nft-ttl-adjust.sh --status
 ```
 
-By default the helper targets the `inet fw4 mangle_forward` chain and sets the
-TTL/HopLimit to 117 so the target network recognises the router as a handset.
-Adjust `--interface` to match your upstream device (for example `wan`,
-`wwan0`, `usb0`).
+If you'd rather have the script insert full nftable rules into a chain, the
+older behaviour (direct `nft add rule ...`) is available in previous
+commits, but the snippet approach is recommended for fw4-managed systems.
 
 ## Troubleshooting Cheatsheet
 

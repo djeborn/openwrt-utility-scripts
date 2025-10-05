@@ -1,6 +1,6 @@
 # USB Tethering Internet Monitor
 
-A robust shell script for OpenWrt routers that automatically monitors and restarts USB tethering when internet connectivity is lost. This README was restored and includes setup instructions for OpenWrt and Android devices.
+A robust shell script for OpenWrt routers that automatically monitors and restarts USB tethering when internet connectivity is lost. This README was restored and includes setup instructions for OpenWrt and Android devices. The primary script is named `usb-tether-monitor.sh` in this folder.
 
 ## Features
 
@@ -107,8 +107,7 @@ Restart network:
 
 ## Configuration Options (in script)
 
-Open the top of the script (for example `usb-tether-monitor.sh` or the
-original `VisibleInternetChecker.sh`) and edit variables such as:
+Open the top of the script (`usb-tether-monitor.sh`) and edit variables such as:
 
 - `PING_TARGETS` - space-separated ping targets
 - `PING_COUNT` - number of pings per target

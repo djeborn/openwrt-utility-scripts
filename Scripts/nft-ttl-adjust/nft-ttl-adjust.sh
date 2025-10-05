@@ -3,7 +3,7 @@
 # nft-ttl-adjust.sh — generic nftables TTL/HopLimit adjuster for OpenWrt
 # ----------------------------------------------------------------------------
 # Adds or removes nftables rules which set IPv4 TTL and IPv6 hoplimit on a
-# specified outgoing interface. This is a generic version of the Visible TTL
+# specified outgoing interface. This is a generic TTL/HopLimit adjuster
 # helper and can be used for any carrier where masking TTL helps avoid
 # throttling or classification issues.
 # ============================================================================
@@ -22,6 +22,7 @@ TTL_VALUE="$DEFAULT_TTL"
 INTERFACE_NAME="$DEFAULT_INTERFACE"
 ACTION="apply"
 QUIET=0
+AUTO_CREATE=0
 
 log() {
     if [ "$QUIET" -eq 1 ]; then
@@ -66,6 +67,9 @@ parse_args() {
             --remove|--delete)
                 ACTION="remove"
                 ;;
+                    --create)
+                        AUTO_CREATE=1
+                        ;;
             --status)
                 ACTION="status"
                 ;;
@@ -95,6 +99,7 @@ Options:
   --remove               Remove the TTL rules
   --status               Show current matching rules
   --quiet                Suppress informational output
+    --create               Create table/chain if missing (requires nft privileges)
   --help                 Show this help text
 
 Notes:
@@ -105,11 +110,21 @@ EOF
 
 ensure_fw4_chain_exists() {
     if ! nft list table "$TABLE_FAMILY" "$TABLE_NAME" >/dev/null 2>&1; then
-        error_exit "Table $TABLE_FAMILY $TABLE_NAME not found; ensure fw4 is active"
+        if [ "$AUTO_CREATE" -eq 1 ] 2>/dev/null; then
+            log "Table $TABLE_FAMILY $TABLE_NAME not found; creating it"
+            nft add table "$TABLE_FAMILY" "$TABLE_NAME" || error_exit "Failed to create table $TABLE_NAME"
+        else
+            error_exit "Table $TABLE_FAMILY $TABLE_NAME not found; ensure fw4 is active or run with --create"
+        fi
     fi
 
     if ! nft list chain "$TABLE_FAMILY" "$TABLE_NAME" "$CHAIN_NAME" >/dev/null 2>&1; then
-        error_exit "Chain $CHAIN_NAME not found in table $TABLE_NAME"
+        if [ "$AUTO_CREATE" -eq 1 ] 2>/dev/null; then
+            log "Chain $CHAIN_NAME not found in table $TABLE_NAME; creating chain"
+            nft add chain "$TABLE_FAMILY" "$TABLE_NAME" "$CHAIN_NAME" { type filter hook forward priority 0; } || error_exit "Failed to create chain $CHAIN_NAME"
+        else
+            error_exit "Chain $CHAIN_NAME not found in table $TABLE_NAME; run with --create to create it"
+        fi
     fi
 }
 

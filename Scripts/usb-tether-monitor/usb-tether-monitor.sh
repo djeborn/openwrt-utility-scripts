@@ -81,7 +81,7 @@ init_colors() {
 
 usage() {
     cat <<'EOF'
-Usage: VisibleInternetChecker.sh [options]
+Usage: usb-tether-monitor.sh [options]
 
 Options:
   --continuous               Run continuously (sets CONTINUOUS_MODE=1)

@@ -1,14 +1,14 @@
 # OpenWrt USB Tethering Monitor
 
-Monitor and automatically recover internet connectivity on an OpenWrt router that relies on an Android phone for USB tethering. The repository centres around a shell script, `VisibleInternetChecker.sh`, which watches connectivity, restarts tethering when needed, and offers a handful of operator-friendly switches and config hooks.
+Monitor and automatically recover internet connectivity on an OpenWrt router that relies on an Android phone for USB tethering. The repository centres around a shell script, `usb-tether-monitor.sh`, which watches connectivity, restarts tethering when needed, and offers a handful of operator-friendly switches and config hooks.
 
 ## Repository Structure
 
-- `Scripts/usb-tether-monitor/VisibleInternetChecker.sh` – main monitoring script.
+- `Scripts/usb-tether-monitor/usb-tether-monitor.sh` – main monitoring script.
 - `Scripts/usb-tether-monitor/README.md` – detailed setup guide specific to the script.
 - `Scripts/usb-tether-monitor/` – place for auxiliary assets (init scripts, configs, helpers).
-- `Scripts/visible-ttl-fix/nft-ttl-adjust.sh` – Visible Wireless TTL/HopLimit helper.
-- `Scripts/visible-ttl-fix/README.md` – usage notes for the TTL helper.
+- `Scripts/nft-ttl-adjust/nft-ttl-adjust.sh` – Visible Wireless TTL/HopLimit helper.
+- `Scripts/nft-ttl-adjust/README.md` – usage notes for the TTL helper.
 - Root `README.md` (this file) – high-level overview and quick start.
 
 ## Feature Highlights
@@ -47,9 +47,9 @@ Monitor and automatically recover internet connectivity on an OpenWrt router tha
 
    ```sh
    mkdir -p /root/Scripts/usb-tether-monitor
-   scp Scripts/usb-tether-monitor/VisibleInternetChecker.sh \
-       root@router-ip:/root/Scripts/usb-tether-monitor/
-   chmod +x /root/Scripts/usb-tether-monitor/VisibleInternetChecker.sh
+   scp Scripts/usb-tether-monitor/usb-tether-monitor.sh \
+      root@router-ip:/root/Scripts/usb-tether-monitor/
+   chmod +x /root/Scripts/usb-tether-monitor/usb-tether-monitor.sh
    ```
 
 3. Connect your Android phone via USB, enable USB tethering once, and authorise USB debugging when prompted.
@@ -57,7 +57,7 @@ Monitor and automatically recover internet connectivity on an OpenWrt router tha
 4. Run a manual check:
 
    ```sh
-   /root/Scripts/usb-tether-monitor/VisibleInternetChecker.sh
+   /root/Scripts/usb-tether-monitor/usb-tether-monitor.sh
    ```
 
 ## Configuration Options
@@ -77,11 +77,11 @@ The script uses built-in defaults but can be customised in three ways:
 2. **Command-line flags** (`--no-default-config`, `--config`, `--continuous`, `--interval`, etc.) to override specific values at runtime. See `--help` for the full list:
 
    ```sh
-   /root/Scripts/usb-tether-monitor/VisibleInternetChecker.sh \
-     --continuous --interval 90 --targets "1.1.1.1 8.8.8.8" --max-retries 5
+    /root/Scripts/usb-tether-monitor/usb-tether-monitor.sh \
+       --continuous --interval 90 --targets "1.1.1.1 8.8.8.8" --max-retries 5
    ```
 
-3. **Inline edits**: modify the defaults near the top of `VisibleInternetChecker.sh` if you prefer a baked-in configuration.
+3. **Inline edits**: modify the defaults near the top of `usb-tether-monitor.sh` if you prefer a baked-in configuration.
 
 ### Colour Output
 
@@ -93,7 +93,7 @@ The script uses built-in defaults but can be customised in three ways:
 Inspect the active settings without performing checks:
 
 ```sh
-/root/Scripts/usb-tether-monitor/VisibleInternetChecker.sh --print-config
+/root/Scripts/usb-tether-monitor/usb-tether-monitor.sh --print-config
 ```
 
 ## Running Continuously
@@ -101,14 +101,14 @@ Inspect the active settings without performing checks:
 ### Background Job
 
 ```sh
-/root/Scripts/usb-tether-monitor/VisibleInternetChecker.sh --continuous &
+/root/Scripts/usb-tether-monitor/usb-tether-monitor.sh --continuous &
 ```
 
 ### Cron Example
 
 ```sh
 crontab -e
-*/5 * * * * /root/Scripts/usb-tether-monitor/VisibleInternetChecker.sh >> /var/log/usb-tethering.log 2>&1
+*/5 * * * * /root/Scripts/usb-tether-monitor/usb-tether-monitor.sh >> /var/log/usb-tethering.log 2>&1
 ```
 
 ### Procd Service Skeleton (Optional)
@@ -119,7 +119,7 @@ Create `/etc/init.d/usb-tether-monitor` and enable it to run on boot. A minimal 
 #!/bin/sh /etc/rc.common
 START=95
 USE_PROCD=1
-PROG=/root/Scripts/usb-tether-monitor/VisibleInternetChecker.sh
+PROG=/root/Scripts/usb-tether-monitor/usb-tether-monitor.sh
 
 start_service() {
 	 procd_open_instance
@@ -139,28 +139,28 @@ chmod +x /etc/init.d/usb-tether-monitor
 /etc/init.d/usb-tether-monitor start
 ```
 
-## Visible TTL Bypass Helper
+## TTL Bypass Helper
 
-The `Scripts/visible-ttl-fix/nft-ttl-adjust.sh` script automates the nftables
-rules highlighted in the article
-[Restoring Carrier Throttle Bypass After OpenWrt Update (Visible Network TTL Fix)](https://black.jmyntrn.com/2025/10/05/openwrt-visible-network-ttl-bypass-fix/).
+The `Scripts/nft-ttl-adjust/nft-ttl-adjust.sh` script automates nftables rules
+that adjust packet TTL/HopLimit on a specified outgoing interface. See external
+write-ups on carrier TTL/workarounds for background reading.
 
 ### Apply the rules
 
 ```sh
-/root/Scripts/visible-ttl-fix/nft-ttl-adjust.sh --interface eth1 --ttl 117
+/root/Scripts/nft-ttl-adjust/nft-ttl-adjust.sh --interface eth1 --ttl 117
 ```
 
 ### Remove the rules
 
 ```sh
-/root/Scripts/visible-ttl-fix/nft-ttl-adjust.sh --remove
+/root/Scripts/nft-ttl-adjust/nft-ttl-adjust.sh --remove
 ```
 
 ### Check status
 
 ```sh
-/root/Scripts/visible-ttl-fix/nft-ttl-adjust.sh --status
+/root/Scripts/nft-ttl-adjust/nft-ttl-adjust.sh --status
 ```
 
 By default the helper targets the `inet fw4 mangle_forward` chain and sets the
@@ -174,7 +174,7 @@ Adjust `--interface` to match your upstream device (for example `wan`,
 - **No `usb0` interface** – ensure `kmod-usb-net-rndis` and `kmod-usb-net-cdc-ether` are loaded; check `dmesg` for USB errors.
 - **Script exits with `EXIT_MISSING_PING`** – install `iputils-ping` or ensure BusyBox `ping` is present.
 - **Colours in logs are garbled** – add `--no-color` or set `ENABLE_COLORS=0`.
-- **Need more diagnostics** – run `VisibleInternetChecker.sh --print-config` and inspect `/proc/net/dev` for the tether interface.
+- **Need more diagnostics** – run `usb-tether-monitor.sh --print-config` and inspect `/proc/net/dev` for the tether interface.
 
 ## Contributing
 

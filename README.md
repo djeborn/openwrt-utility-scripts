@@ -1,200 +1,97 @@
-# OpenWrt USB Tethering Monitor
 
-Monitor and automatically recover internet connectivity on an OpenWrt router that relies on an Android phone for USB tethering. The repository centres around a shell script, `usb-tether-monitor.sh`, which watches connectivity, restarts tethering when needed, and offers a handful of operator-friendly switches and config hooks.
+# OpenWrt helper scripts
 
-## Repository Structure
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](./LICENSE)
 
-- `Scripts/usb-tether-monitor/usb-tether-monitor.sh` – main monitoring script.
-- `Scripts/usb-tether-monitor/README.md` – detailed setup guide specific to the script.
-- `Scripts/usb-tether-monitor/` – place for auxiliary assets (init scripts, configs, helpers).
-- `Scripts/nft-ttl-adjust/nft-ttl-adjust.sh` – Visible Wireless TTL/HopLimit helper.
-- `Scripts/nft-ttl-adjust/README.md` – usage notes for the TTL helper.
-- Root `README.md` (this file) – high-level overview and quick start.
+Lightweight collection of small shell scripts and helpers aimed at OpenWrt-based routers and devices. Each script is self-contained and lives under `Scripts/` with its own README detailing options and examples.
 
-## Feature Highlights
+## Contents
 
-- 🟢 Automatic recovery when pings to public targets fail.
-- 🔁 Smart retry cycles and verification after tethering restarts.
-- 🎨 Colorised, timestamped logs with auto-disable on non-interactive outputs.
-- ⚙️ Runtime configuration via optional config file or CLI flags.
-- 🔄 Single-run and continuous monitoring modes.
-- 📝 Optional `--print-config` summary for quick diagnostics.
+- `Scripts/nft-ttl-adjust/` - Helper to adjust packet TTLs (nftables-based helper). See `Scripts/nft-ttl-adjust/README.md` for details and usage examples.
+- `Scripts/usb-tether-monitor/` - Monitor USB tethering state and run user-defined hooks (bring interface up/down, notify, log). See `Scripts/usb-tether-monitor/README.md` for details.
+
+## Intended use / contract
+
+- Inputs: shell environment on an OpenWrt or Linux-based router, installed dependencies noted in each script's README (usually `nft`, `ip`, `grep`, `awk`, busybox utilities).
+- Outputs: script-specific actions (nft rules adjustments, interface state changes, logs) and informative exit codes (0 on success, non-zero on error).
+- Error modes: missing dependencies, insufficient permissions (scripts need to run as root), unsupported kernel/netfilter configuration.
+
+If something needs root privileges the script will usually indicate it — run under root or via an init/hotplug mechanism on OpenWrt.
+
+## Quick start
+
+
+1. Inspect the per-script README files for configuration and examples:
+
+    - `Scripts/nft-ttl-adjust/README.md`
+    - `Scripts/usb-tether-monitor/README.md`
+
+1. Make a copy to your router and mark executable:
+
+```sh
+# copy to router (example using scp)
+scp -r Scripts/* root@your-router:/usr/local/bin/
+
+# on the router
+chmod +x /usr/local/bin/nft-ttl-adjust.sh
+chmod +x /usr/local/bin/usb-tether-monitor.sh
+```
+
+1. Run manually for testing, then install as a service, hotplug or cron job as appropriate for your setup. On OpenWrt you can integrate scripts via `/etc/init.d/` or add them to hotplug events.
+
+## Examples
+
+See the embedded README in each script's folder for concrete command-line examples. Example (testing on a router shell):
+
+```sh
+# run the USB tether monitor once (interactive test)
+/usr/local/bin/usb-tether-monitor.sh --test
+
+# show nft-ttl-adjust help
+/usr/local/bin/nft-ttl-adjust.sh --help
+```
 
 ## Requirements
 
-### Router
+- OpenWrt or a Linux-based router
+- `nft` (nftables) for `nft-ttl-adjust` if you plan to use nft-based rules
+- BusyBox coreutils (installed by default on OpenWrt)
+- Root or equivalent privileges to modify interfaces and firewall/nft rules
 
-- OpenWrt 19.07 or newer (tested on BusyBox `ash`).
-- USB host port with power for the phone.
-- Packages: `adb`, `kmod-usb-net-rndis`, `kmod-usb-net-cdc-ether`, and a `ping` implementation (BusyBox or `iputils`).
+If you're missing a tool, check the per-script README where common requirements are listed.
 
-### Android Phone
+## Troubleshooting
 
-- Android 5.0 (Lollipop) or newer with USB tethering support.
-- USB debugging enabled (Developer Options) and authorised for the router.
-- Reliable mobile data or upstream Wi-Fi connection.
+- Script exits with permission errors: re-run as root or via sudo/procd/init.d.
+- nft operations fail: verify `nft` is installed and kernel supports nftables.
+- USB tethering not detected: check `dmesg` and `logread` on OpenWrt; ensure your device enumerates as a network interface.
 
-## Quick Start
-
-1. SSH into your OpenWrt router and install dependencies:
-
-   ```sh
-   opkg update
-   opkg install kmod-usb-net-rndis kmod-usb-net-cdc-ether adb iputils-ping
-   ```
-
-2. Copy the script onto the router (default location shown):
-
-   ```sh
-   mkdir -p /root/Scripts/usb-tether-monitor
-   scp Scripts/usb-tether-monitor/usb-tether-monitor.sh \
-      root@router-ip:/root/Scripts/usb-tether-monitor/
-   chmod +x /root/Scripts/usb-tether-monitor/usb-tether-monitor.sh
-   ```
-
-3. Connect your Android phone via USB, enable USB tethering once, and authorise USB debugging when prompted.
-
-4. Run a manual check:
-
-   ```sh
-   /root/Scripts/usb-tether-monitor/usb-tether-monitor.sh
-   ```
-
-## Configuration Options
-
-The script uses built-in defaults but can be customised in three ways:
-
-1. **External config file** (default path `/etc/usb-tether-monitor.conf`). Any shell assignments placed here override defaults. Example:
-
-   ```sh
-   # /etc/usb-tether-monitor.conf
-   PING_TARGETS='1.1.1.1 9.9.9.9'
-   CONTINUOUS_MODE=1
-   CHECK_INTERVAL=120
-   ENABLE_COLORS=0
-   ```
-
-2. **Command-line flags** (`--no-default-config`, `--config`, `--continuous`, `--interval`, etc.) to override specific values at runtime. See `--help` for the full list:
-
-   ```sh
-    /root/Scripts/usb-tether-monitor/usb-tether-monitor.sh \
-       --continuous --interval 90 --targets "1.1.1.1 8.8.8.8" --max-retries 5
-   ```
-
-3. **Inline edits**: modify the defaults near the top of `usb-tether-monitor.sh` if you prefer a baked-in configuration.
-
-### Colour Output
-
-- Colours are on by default when stdout is a TTY.
-- Disable permanently via `ENABLE_COLORS=0` (config or CLI `--no-color`).
-
-### Print Effective Configuration
-
-Inspect the active settings without performing checks:
-
-```sh
-/root/Scripts/usb-tether-monitor/usb-tether-monitor.sh --print-config
-```
-
-## Running Continuously
-
-### Background Job
-
-```sh
-/root/Scripts/usb-tether-monitor/usb-tether-monitor.sh --continuous &
-```
-
-### Cron Example
-
-```sh
-crontab -e
-*/5 * * * * /root/Scripts/usb-tether-monitor/usb-tether-monitor.sh >> /var/log/usb-tethering.log 2>&1
-```
-
-### Procd Service Skeleton (Optional)
-
-Create `/etc/init.d/usb-tether-monitor` and enable it to run on boot. A minimal skeleton:
-
-```sh
-#!/bin/sh /etc/rc.common
-START=95
-USE_PROCD=1
-PROG=/root/Scripts/usb-tether-monitor/usb-tether-monitor.sh
-
-start_service() {
-	 procd_open_instance
-   procd_set_param command $PROG --continuous
-   procd_set_param respawn
-   procd_set_param stdout 1
-   procd_set_param stderr 1
-   procd_close_instance
-}
-```
-
-Remember to make it executable and enable it:
-
-```sh
-chmod +x /etc/init.d/usb-tether-monitor
-/etc/init.d/usb-tether-monitor enable
-/etc/init.d/usb-tether-monitor start
-```
-
-## TTL Bypass Helper (snippet-based)
-
-The `Scripts/nft-ttl-adjust/nft-ttl-adjust.sh` helper now manages a small
-drop-in snippet for `fw4` instead of directly adding/removing rules with
-`nft`. This aligns with OpenWrt's `fw4` snippet mechanism and makes the
-changes persistent and easy to manage via the normal `fw4 reload` flow.
-
-What it does now:
-
-- Writes a snippet file at `/usr/share/nftables.d/chain-pre/mangle_postrouting/01-set-ttl.nft`
-   containing two simple rewrite lines:
-   - `ip ttl set <value>`
-   - `ip6 hoplimit set <value>`
-- Calls `fw4 reload` after creating or removing the snippet so the change is applied.
-- Supports `--create` to create the parent directory if it's missing.
-
-Examples
-
-Apply (default) — creates the snippet and reloads fw4:
-
-```sh
-/root/Scripts/nft-ttl-adjust/nft-ttl-adjust.sh --ttl 65 --create --apply
-```
-
-Remove the snippet and reload fw4:
-
-```sh
-/root/Scripts/nft-ttl-adjust/nft-ttl-adjust.sh --remove
-```
-
-Check status (prints the snippet contents or `(none)`):
-
-```sh
-/root/Scripts/nft-ttl-adjust/nft-ttl-adjust.sh --status
-```
-
-If you'd rather have the script insert full nftable rules into a chain, the
-older behaviour (direct `nft add rule ...`) is available in previous
-commits, but the snippet approach is recommended for fw4-managed systems.
-
-## Troubleshooting Cheatsheet
-
-- **`adb devices` shows `unauthorized`** – unlock the phone, accept the debugging prompt, then rerun the script.
-- **No `usb0` interface** – ensure `kmod-usb-net-rndis` and `kmod-usb-net-cdc-ether` are loaded; check `dmesg` for USB errors.
-- **Script exits with `EXIT_MISSING_PING`** – install `iputils-ping` or ensure BusyBox `ping` is present.
-- **Colours in logs are garbled** – add `--no-color` or set `ENABLE_COLORS=0`.
-- **Need more diagnostics** – run `usb-tether-monitor.sh --print-config` and inspect `/proc/net/dev` for the tether interface.
+For persistent issues, enable debug/logging shown in each script's README and file an issue with logs attached.
 
 ## Contributing
 
-Bug reports, feature ideas, and pull requests are welcome. When contributing, please:
+Contributions are welcome. Please open a pull request with:
 
-- Keep shell compatible with BusyBox `ash`.
-- Add notes to `Scripts/usb-tether-monitor/README.md` if behaviour changes.
-- Run shellcheck locally if available.
+- A short description of the change
+- Why it's needed (bug, feature, portability)
+- Minimal test instructions
+
+Keep changes small and script-compatible with BusyBox shells where possible.
 
 ## License
 
-Unless stated otherwise in individual files, this project is released under the MIT License.
+These scripts are provided under the MIT License — see `LICENSE` if present in this repository. If no license file exists, contact the repository owner for clarification before reuse in production.
+
+## Notes / assumptions
+
+- These scripts were written as small utilities for OpenWrt-style environments; they assume a POSIX-like shell and common utilities are available.
+- For full, authoritative usage follow each script's README in `Scripts/<script-name>/README.md`.
+
+---
+
+If you'd like, I can also:
+
+- Extract and summarize the usage examples from each script's README and embed them into this root README.
+- Add an explicit `LICENSE` file (MIT) if you want to publish this repository with permissive licensing.
+
+

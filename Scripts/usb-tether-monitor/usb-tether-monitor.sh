@@ -1,5 +1,8 @@
 #!/bin/ash
 set -u
+
+# Script version
+VERSION="0.1.0"
 # USB Tethering Internet Monitor (OpenWrt-friendly)
 # Restored version with colored logging, retries, and continuous mode
 
@@ -99,6 +102,7 @@ Options:
   --color                    Force colored output
   --print-config             Show effective configuration and exit
   --help                     Show this help message
+    --version|-v               Show script version
 EOF
 }
 
@@ -224,6 +228,10 @@ parse_args() {
                 usage
                 exit 0
                 ;;
+            --version|-v)
+            echo "$VERSION"
+            exit 0
+            ;;
             --)
                 shift
                 break
@@ -526,6 +534,7 @@ main() {
 
     printf "\n${COLOR_BOLD}${COLOR_CYAN}========================================${COLOR_RESET}\n"
     printf "${COLOR_BOLD}${COLOR_CYAN}  USB Tethering Internet Monitor${COLOR_RESET}\n"
+    printf "${COLOR_BOLD}${COLOR_CYAN}  Version: %s${COLOR_RESET}\n" "$VERSION"
     printf "${COLOR_BOLD}${COLOR_CYAN}========================================${COLOR_RESET}\n\n"
 
     if [ -n "$CONFIG_LOADED_FILES" ]; then

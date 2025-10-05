@@ -10,6 +10,9 @@
 
 set -e
 
+# Script version
+VERSION="0.1.0"
+
 DEFAULT_INTERFACE="usb0"
 DEFAULT_TTL=65
 # New approach: drop-in snippet management for fw4
@@ -76,6 +79,11 @@ parse_args() {
                 ;;
             --help|-h)
                 usage
+                echo "Version: $VERSION"
+                exit 0
+                ;;
+            --version|-v)
+                echo "$VERSION"
                 exit 0
                 ;;
             *)

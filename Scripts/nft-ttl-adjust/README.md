@@ -1,5 +1,7 @@
 # TTL Bypass Helper
 
+Version: 0.1.0
+
 Helper script for applying nftables-based TTL/HopLimit adjustments. See
 external write-ups on carrier TTL/workarounds for background reading.
 

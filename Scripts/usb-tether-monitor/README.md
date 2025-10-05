@@ -1,5 +1,7 @@
 # USB Tethering Internet Monitor
 
+Version: 0.1.0
+
 A robust shell script for OpenWrt routers that automatically monitors and restarts USB tethering when internet connectivity is lost. This README was restored and includes setup instructions for OpenWrt and Android devices. The primary script is named `usb-tether-monitor.sh` in this folder.
 
 ## Features
@@ -34,14 +36,14 @@ A robust shell script for OpenWrt routers that automatically monitors and restar
 opkg update
 ```
 
-2. Install required packages:
+1. Install required packages:
 
 ```sh
 opkg install kmod-usb-net-rndis kmod-usb-net-cdc-ether
 opkg install adb
 ```
 
-3. Create a directory and upload the script (recommended filename: `usb-tether-monitor.sh`):
+1. Create a directory and upload the script (recommended filename: `usb-tether-monitor.sh`):
 
 ```sh
 mkdir -p /root/Scripts/usb-tether-monitor
@@ -50,7 +52,7 @@ mkdir -p /root/Scripts/usb-tether-monitor
 chmod +x /root/Scripts/usb-tether-monitor/usb-tether-monitor.sh
 ```
 
-4. Verify ADB is available on the router:
+1. Verify ADB is available on the router:
 
 ```sh
 adb version
@@ -92,7 +94,7 @@ adb shell svc usb setFunctions none
 
 After enabling USB tethering, the router may expose a `usb0` (or similar) interface. To configure a persistent interface, add to `/etc/config/network`:
 
-```
+```text
 config interface 'usbwan'
     option ifname 'usb0'
     option proto 'dhcp'
@@ -159,4 +161,4 @@ Run via cron (example, every 5 minutes):
 
 ---
 
-_Last updated: October 5, 2025_
+Last updated: October 5, 2025 — Version 0.1.0

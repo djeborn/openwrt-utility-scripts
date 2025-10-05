@@ -121,7 +121,7 @@ ensure_fw4_chain_exists() {
     if ! nft list chain "$TABLE_FAMILY" "$TABLE_NAME" "$CHAIN_NAME" >/dev/null 2>&1; then
         if [ "$AUTO_CREATE" -eq 1 ] 2>/dev/null; then
             log "Chain $CHAIN_NAME not found in table $TABLE_NAME; creating chain"
-            nft add chain "$TABLE_FAMILY" "$TABLE_NAME" "$CHAIN_NAME" { type filter hook forward priority 0; } || error_exit "Failed to create chain $CHAIN_NAME"
+            nft add chain "$TABLE_FAMILY" "$TABLE_NAME" "$CHAIN_NAME" \{ type filter hook forward priority 0; \} || error_exit "Failed to create chain $CHAIN_NAME"
         else
             error_exit "Chain $CHAIN_NAME not found in table $TABLE_NAME; run with --create to create it"
         fi
